@@ -1,0 +1,6 @@
+[flake8]
+# some comment
+ignore = F401, W292
+max-complexity = 10
+max_line_length = 119
+exclude = tests, setup.py, __init__.py
