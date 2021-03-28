@@ -5,15 +5,13 @@ from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
+import click
+
 from fake_useragent import UserAgent
 
 import requests
 
 BASE_URL = 'https://rabota.ua/'
-COUNTRY = 'украина'
-CITY = 'киев'
-vacancy = 'Junior Python Developer'
-query = "+".join(vacancy.split())
 
 UA = UserAgent().chrome
 headers = {"User-Agent": UA}
@@ -46,8 +44,9 @@ def get_job_links_from_page(page_url):
 
 def get_all_job_links(pages_list):
     links = []
-    for link in pages_list:
-        links += get_job_links_from_page(link)
+    with click.progressbar(pages_list, label='Process get all job links') as bar:
+        for link in bar:
+            links += get_job_links_from_page(link)
     return links
 
 
@@ -60,34 +59,42 @@ def get_ld_json(url: str) -> dict:
 
 def get_jobs(list_jobs_links):
     job_list = []
-    for link in list_jobs_links:
-        json_content = get_ld_json(link)
-        job = {
-            'link': link,
-            'title': json_content[4]['title'],
-            'description': json_content[4]['description'],
-            'company': json_content[4]['hiringOrganization']['name'],
-            'work_time': json_content[4]['employmentType'],
-            'date_posted': json_content[4]['datePosted']
-        }
-        job_list.append(job)
-    return job_list
+    with click.progressbar(list_jobs_links, label='Process get all job ') as bar:
+        for link in bar:
+            json_content = get_ld_json(link)
+            job = {
+                'link': link,
+                'title': json_content[4]['title'],
+                'description': json_content[4]['description'],
+                'company': json_content[4]['hiringOrganization']['name'],
+                # 'work_time': json_content[4]['employmentType'],
+                'date_posted': json_content[4]['datePosted']
+            }
+            job_list.append(job)
+        return job_list
 
 
-url = urljoin(BASE_URL, f'/zapros/{query}/{CITY}')
+@click.command()
+@click.argument('vacancy', type=str)
+@click.option('-city', type=str, default='киев')
+def main(vacancy, city):
+    query = "+".join(vacancy.split())
+    url = urljoin(BASE_URL, f'/zapros/{query}/{city}')
+    pages_links = get_pages_links(url)
+    job_links = get_all_job_links(pages_links)
+    jobs_list = get_jobs(job_links)
 
-pages_links = get_pages_links(url)
-job_links = get_all_job_links(pages_links)
-jobs_list = get_jobs(job_links)
+    with open(f'{vacancy}.csv', mode='w') as f:
+        writer = csv.DictWriter(f, fieldnames=['link',
+                                               'title',
+                                               'description',
+                                               'company',
+                                               # 'work_time',
+                                               'date_posted'
+                                               ])
+        writer.writeheader()
+        writer.writerows(jobs_list)
 
 
-with open('job.csv', mode='w') as f:
-    writer = csv.DictWriter(f, fieldnames=['link',
-                                           'title',
-                                           'description',
-                                           'company',
-                                           'work_time',
-                                           'date_posted'
-                                           ])
-    writer.writeheader()
-    writer.writerows(jobs_list)
+if __name__ == '__main__':
+    main()
